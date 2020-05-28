@@ -1,0 +1,37 @@
+# Install Vagrant
+brew cask install virtualbox
+brew cask install vagrant
+brew cask install vagrant-manager
+
+vagrant up m1 w1 w2
+export DOCKER_HOST=192.168.99.201
+docker swarm init --advertise-addr=192.168.99.201
+
+export DOCKER_HOST=192.168.99.211
+docker swarm join --token SWMTKN-1-528kbamy2g3z9eeaka5qkg2jilo9mp4jilamar7rbg02yd5djm-bpsswtejhu7uiolu8t0zch1n7 192.168.99.201:2377
+#Repeat above for the second worker 192.168.99.212
+
+#install viz on the cluster
+export DOCKER_HOST=192.168.99.201
+docker service create \
+  --name=viz \
+  --publish=8090:8080 \
+  --constraint=node.role==manager \
+  --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  dockersamples/visualizer
+
+docker service create --name customer-api --publish 3000:3000 swarmgs/customer
+docker service scale customer-api=2
+
+#Publishing port - Ingress mode vs host mode
+In default Ingress mode the traffic for the given port is sent to the overlay Ingress network which is then routed to a node with a running container for that mode.
+Host mode however ensures the traffic for a given port is directly received by the host.
+Ingress mode: --publish 8080:8080
+Host mode: --publish mode=host,published=8080,target=8080
+
+#Try rolling updates
+docker service create --name pay -p 3000:3000 swarmgs/payroll:1
+docker service update --image swarmgs/payroll:2 pay
+docker service update --image swarmgs/payroll:2 --update-delay=1m20s pay
+docker service update --image swarmgs/payroll:3 --update-delay=10s --update-parallelism=3 pay
+
